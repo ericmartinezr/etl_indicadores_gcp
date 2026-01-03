@@ -2,11 +2,31 @@
 
 Estos comandos son para uso local. Para el uso en GCP se debe utilizar el archivo cloudbuild.yaml.
 
+## Preparación de ambiente
+
+Definición de variables comunes al proyecto
+
+```bash
+export PROJECT_ID="etl-indicadores"
+export REGION="us-central1"
+export PROJECT_NUMBER=$(gcloud projects describe $PROJECT_ID --format="value(projectNumber)")
+
+gcloud config set project $PROJECT_ID
+```
+
 ## Generar una cuenta de servicio en Google Cloud
 
 ```sh
 gcloud iam service-accounts create airflow-app-sa \
   --description="Cuenta de servicio para Airflow"
+
+SA_EMAIL="airflow-app-sa@${PROJECT_ID}.iam.gserviceaccount.com"
+```
+
+### Dar permisos para operar sobre BigQuery
+
+```sh
+gcloud projects add-iam-policy-binding $PROJECT_ID --member="serviceAccount:${SA_EMAIL}" --role="roles/bigquery.user"
 ```
 
 ## Generar una llave para uso local
@@ -49,4 +69,16 @@ kill $(cat ~/airflow/airflow-scheduler.pid)
 
 # Detener lo que quede vivo
 ps aux | grep airflow | grep -v grep | awk '{print $2}' | xargs kill -9
+```
+
+## Pool
+
+Para evitar colapsar la API se asignó un pool de 3 slots. Esto se realiza desde la interfaz gráfica `Admin -> Pools`. Luego se referencia en el `@task` que realiza la consulta a la API.
+
+## Testing
+
+Ejecutar los tests
+
+```sh
+python -m pytest ./tests
 ```
