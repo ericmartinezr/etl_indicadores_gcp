@@ -108,9 +108,23 @@ ps aux | grep airflow | grep -v grep | awk '{print $2}' | xargs kill -9
 lsof -i :8793 | sed 1d |  awk '{print $2}' | xargs kill -9
 ```
 
-## Pool
+## Configuración
+
+### Pool
 
 Para evitar colapsar la API se asignó un pool de 3 slots. Esto se realiza desde la interfaz gráfica `Admin -> Pools`. Luego se referencia en el `@task` que realiza la consulta a la API.
+
+### Serialización
+
+Ya que estoy usando schemas de Pydantic es necesario registrarlos en la configuración para que Airflow pueda serializarlos/deserializarlos
+
+```sh
+nano ~/airflow/airflow.cfg
+
+# Buscar la linea allowed_deserialization_classes
+# Separar por coma
+allowed_deserialization_classes = airflow.*, schemas.indicador_response.*
+```
 
 ## Testing
 
