@@ -23,8 +23,8 @@ from schemas.indicador_response import IndicadorResponse
 
 with DAG(
     dag_id="indicadores",
-    schedule="@monthly",
-    start_date=pendulum.datetime(2025, 12, 1, tz="UTC"),
+    schedule="@yearly",
+    start_date=pendulum.datetime(2025, 1, 1, tz="UTC"),
     catchup=False,
     max_active_runs=1,
     default_args={
@@ -32,6 +32,7 @@ with DAG(
     }
 ) as dag:
 
+    # Valida que exista la tabla
     check_table_exists = BigQueryTableExistenceSensor(
         task_id="check-table-exists",
         project_id=Variable.get("project"),
@@ -40,6 +41,7 @@ with DAG(
         gcp_conn_id="google_cloud_default",
     )
 
+    # Inserta el resultado a BigQuery
     insert_to_table = BigQueryInsertJobOperator(
         task_id="insert-to-table",
         configuration={
@@ -58,6 +60,26 @@ with DAG(
         gcp_conn_id="google_cloud_default",
     )
 
+    # Elimina de BigQuery el periodo (año) que se está procesando en caso de reproceso
+    delete_from_table = BigQueryInsertJobOperator(
+        task_id="delete-from-fecha",
+        configuration={
+                "query": {
+                    "query": """
+                    DELETE FROM 
+                        `{{var.value.get('project')}}.{{var.value.get('dataset')}}.{{var.value.get('table')}}` 
+                    WHERE 
+                        fecha_valor 
+                    BETWEEN 
+                        "{{macros.ds_format(ds, '%Y-%m-%d', '%Y')}}-01-01" and "{{macros.ds_format(ds, '%Y-%m-%d', '%Y')}}-12-31"
+                    """,
+                    "useLegacySql": False
+                }
+        },
+        gcp_conn_id="google_cloud_default",
+    )
+
+    # Elimina el archivo de Cloud Storage luego de cargarlo en BigQuery
     delete_file = GCSDeleteObjectsOperator(
         task_id="delete-file",
         bucket_name=Variable.get("bucket"),
@@ -68,11 +90,10 @@ with DAG(
     @task(pool="etl_api_mindicador_pool")
     def extract(indicator_type: str, ds: Optional[str] = None) -> IndicadorResponse:
         """
-        Extracts information from mindicador.cl
+        Extrae datos de indicadores desde mindicador.cl
         """
 
-        # Get the year from the data
-        # ds format = yyyy-mm-dd
+        # Obtiene el año del logical date
         yyyy = ds.split("-")[0]
         api_url = f"https://mindicador.cl/api/{indicator_type}/{yyyy}"
 
@@ -106,9 +127,8 @@ with DAG(
             extract_data: IndicadorResponse,
             ds: Optional[str] = None) -> str:
         """
-        Transforms de data extracted from mindicador.cl
+        Transforma los datos obtrenidos desde from mindicador.cl
         """
-
         rows = []
         extract_serie = extract_data.serie
         for serie in extract_serie:
@@ -123,6 +143,9 @@ with DAG(
 
     @task(task_id='save-to-gcs')
     def save_to_gcs(sequence: LazySelectSequence, ds: Optional[str] = None) -> str:
+        """"
+        Guarda el resultado en un archivo en Cloud Storage
+        """
         bucket = Variable.get("bucket")
         rows = "\n".join([row for row in sequence])
         fecha = "".join([x for x in ds.split("-")])
@@ -145,4 +168,4 @@ with DAG(
     check_table_exists >> extract_data
     transform_data = transform.expand(extract_data=extract_data)
     transform_data >> save_to_gcs(
-        transform_data) >> insert_to_table >> delete_file
+        transform_data) >> delete_from_table >> insert_to_table >> delete_file

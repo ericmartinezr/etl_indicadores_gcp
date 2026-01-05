@@ -112,6 +112,15 @@ lsof -i :8793 | sed 1d |  awk '{print $2}' | xargs kill -9
 
 ## Configuración
 
+### Conexión GCP
+
+En teoría esto debería ser solo en local.
+
+> Admin > Connections
+
+Buscar y editar `google_cloud_default`.
+En el campo `Keyfile Path` ingresar `/home/eric/.config/gcloud/airflow.json` (la ruta donde se generó el key del paso más arriba)
+
 ### Pool
 
 Para evitar colapsar la API se asignó un pool de 3 slots. Esto se realiza desde la interfaz gráfica `Admin -> Pools`. Luego se referencia en el `@task` que realiza la consulta a la API.
