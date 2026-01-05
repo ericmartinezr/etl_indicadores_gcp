@@ -23,9 +23,11 @@ gcloud iam service-accounts create airflow-app-sa \
 SA_EMAIL="airflow-app-sa@${PROJECT_ID}.iam.gserviceaccount.com"
 ```
 
-### Dar permisos para operar sobre BigQuery
+### Dar permisos para operar sobre Cloud Storage y BigQuery
 
 ```sh
+gcloud projects add-iam-policy-binding $PROJECT_ID --member="serviceAccount:${SA_EMAIL}" --role="roles/storage.objectUser"
+
 gcloud projects add-iam-policy-binding $PROJECT_ID --member="serviceAccount:${SA_EMAIL}" --role="roles/bigquery.user"
 ```
 

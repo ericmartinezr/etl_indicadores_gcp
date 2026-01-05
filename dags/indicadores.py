@@ -7,6 +7,7 @@ from pydantic import ValidationError
 from airflow import DAG
 from airflow.decorators import task
 from airflow.utils.trigger_rule import TriggerRule
+from airflow.utils.db import LazySelectSequence
 from airflow.exceptions import AirflowFailException, AirflowSkipException
 from airflow.providers.google.cloud.sensors.bigquery import (
     BigQueryTableExistenceSensor
@@ -15,6 +16,7 @@ from airflow.providers.google.cloud.operators.bigquery import (
     BigQueryInsertJobOperator
 )
 from airflow.providers.google.cloud.hooks.gcs import GCSHook
+from airflow.providers.google.cloud.operators.gcs import GCSDeleteObjectsOperator
 from schemas.indicador_response import IndicadorResponse
 
 
@@ -51,17 +53,25 @@ with DAG(
         task_id="insert-to-table",
         configuration={
                 "load": {
-                    "sourceUris": ["{{ ti.xcom_pull(task_ids='transform') }}"],
+                    "sourceUris": ["{{ task_instance.xcom_pull(task_ids='save-to-gcs') }}"],
                     "destinationTable": {
                         "projectId": PROJECT_ID,
                         "datasetId": DATASET_ID,
                         "tableId": TABLE_ID
                     },
-                    "sourceFormat": "NEWLINE_DELIMITED_JSON",
+                    "sourceFormat": "CSV",
                     "writeDisposition": "WRITE_APPEND",
-                    "autodetect": True
+                    "autodetect": False
                 }
-        }
+        },
+        gcp_conn_id="google_cloud_default",
+    )
+
+    delete_file = GCSDeleteObjectsOperator(
+        task_id="delete-file",
+        bucket_name=BUCKET_ID,
+        objects=["{{ task_instance.xcom_pull(task_ids='save-to-gcs') }}"],
+        gcp_conn_id="google_cloud_default",
     )
 
     @task(pool="etl_api_mindicador_pool")
@@ -75,7 +85,7 @@ with DAG(
         yyyy = ds.split("-")[0]
         api_url = f"https://mindicador.cl/api/{indicator_type}/{yyyy}"
 
-        response = httpx.get(api_url)
+        response = httpx.get(api_url, timeout=60)
         if response.status_code != 200:
             raise AirflowFailException(f"No existen datos para el año {yyyy}")
 
@@ -107,22 +117,23 @@ with DAG(
         Transforms de data extracted from mindicador.cl
         """
 
-        logging.info("EXTRACT DATA")
-        logging.info(extract_data)
-
         rows = []
         extract_serie = extract_data.serie
         for serie in extract_serie:
-            rows.append({
-                "codigo": extract_data.codigo,
-                "nombre": extract_data.nombre,
-                "unidad_medida": extract_data.unidad_medida,
-                "valor": serie.valor,
-                "fecha_valor": serie.fecha
-            })
+            rows.append("{codigo},{nombre},{um},{val},{fecval}"
+                        .format(codigo=extract_data.codigo,
+                                nombre=extract_data.nombre,
+                                um=extract_data.unidad_medida,
+                                val=serie.valor,
+                                fecval=serie.fecha))
 
+        return "\n".join(rows)
+
+    @task(task_id='save-to-gcs')
+    def save_to_gcs(sequence: LazySelectSequence, ds: Optional[str] = None) -> str:
+        rows = "\n".join([row for row in sequence])
         fecha = "".join([x for x in ds.split("-")])
-        object_name = f"{extract_data.codigo}_{fecha}.csv"
+        object_name = f"indicadores_{fecha}.csv"
 
         hook = GCSHook(
             gcp_conn_id="google_cloud_default",
@@ -130,7 +141,7 @@ with DAG(
         hook.upload(
             bucket_name=BUCKET_ID,
             object_name=object_name,
-            data=json.dumps(rows),
+            data=rows,
             encoding="utf-8",
         )
 
@@ -138,7 +149,6 @@ with DAG(
 
     extract_data = extract.expand(indicator_type=INDICATOR_TYPES)
     check_table_exists >> extract_data
-
     transform_data = transform.expand(extract_data=extract_data)
-
-    transform_data >> insert_to_table
+    transform_data >> save_to_gcs(
+        transform_data) >> insert_to_table >> delete_file
