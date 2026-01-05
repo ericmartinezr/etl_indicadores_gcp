@@ -1,6 +1,7 @@
 {
     "bucket": "indicadores-bucket",
     "dataset": "ds_indicadores",
+    "email": "eric.martinezr@gmail.com",
     "indicators": [
         "uf",
         "ivp",

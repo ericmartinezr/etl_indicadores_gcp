@@ -2,6 +2,7 @@ import pendulum
 import logging
 import httpx
 import json
+from datetime import timedelta
 from typing import Optional
 from pydantic import ValidationError
 from airflow import DAG
@@ -10,11 +11,9 @@ from airflow.decorators import task
 from airflow.utils.trigger_rule import TriggerRule
 from airflow.utils.db import LazySelectSequence
 from airflow.exceptions import AirflowFailException, AirflowSkipException
-from airflow.providers.google.cloud.sensors.bigquery import (
-    BigQueryTableExistenceSensor
-)
 from airflow.providers.google.cloud.operators.bigquery import (
-    BigQueryInsertJobOperator
+    BigQueryInsertJobOperator,
+    BigQueryCheckOperator
 )
 from airflow.providers.google.cloud.hooks.gcs import GCSHook
 from airflow.providers.google.cloud.operators.gcs import GCSDeleteObjectsOperator
@@ -25,21 +24,16 @@ with DAG(
     dag_id="indicadores",
     schedule="@yearly",
     start_date=pendulum.datetime(2025, 1, 1, tz="UTC"),
+    # end_date=pendulum.datetime(2026, 1, 5, tz="UTC"),
     catchup=False,
     max_active_runs=1,
     default_args={
-        "retries": 1
+        "retries": 1,
+        "email": [Variable.get("email")],
+        "email_on_failure": True,
+        "execution_timeout": timedelta(minutes=3)
     }
 ) as dag:
-
-    # Valida que exista la tabla
-    check_table_exists = BigQueryTableExistenceSensor(
-        task_id="check-table-exists",
-        project_id=Variable.get("project"),
-        dataset_id=Variable.get("dataset"),
-        table_id=Variable.get("table"),
-        gcp_conn_id="google_cloud_default",
-    )
 
     # Inserta el resultado a BigQuery
     insert_to_table = BigQueryInsertJobOperator(
@@ -57,6 +51,23 @@ with DAG(
                     "autodetect": False
                 }
         },
+        gcp_conn_id="google_cloud_default",
+    )
+
+    # Valida que la insercion se haya realizado correctamente
+    check_table = BigQueryCheckOperator(
+        task_id='check-table',
+        sql="""
+            SELECT 
+                COUNT(*) 
+            FROM 
+                `{{var.value.get('project')}}.{{var.value.get('dataset')}}.{{var.value.get('table')}}`
+            WHERE
+                fecha_valor 
+            BETWEEN
+                "{{macros.ds_format(ds, '%Y-%m-%d', '%Y')}}-01-01" and "{{macros.ds_format(ds, '%Y-%m-%d', '%Y')}}-12-31"
+        """,
+        use_legacy_sql=False,
         gcp_conn_id="google_cloud_default",
     )
 
@@ -83,7 +94,8 @@ with DAG(
     delete_file = GCSDeleteObjectsOperator(
         task_id="delete-file",
         bucket_name=Variable.get("bucket"),
-        objects=["{{ task_instance.xcom_pull(task_ids='save-to-gcs') }}"],
+        objects=[
+            "{{ task_instance.xcom_pull(task_ids='save-to-gcs').split('/')[-1] }}"],
         gcp_conn_id="google_cloud_default",
     )
 
@@ -104,9 +116,6 @@ with DAG(
         try:
             # Aparentemente si se pasa algun año sin datos (e.g., 1600) en vez de retornar un 404 o 500
             # simplemente retorna un json con el arreglo "serie" vacio
-            logging.info("Response")
-            logging.info(response.json())
-
             res_json = IndicadorResponse.model_validate_json(
                 json.dumps(response.json()))
 
@@ -119,13 +128,11 @@ with DAG(
         except ValidationError as ve:
             logging.error("El formato de respuesta es incorrecto")
             logging.error(ve, exc_info=True)
-            raise AirflowSkipException(
+            raise AirflowFailException(
                 f"El formato de respuesta es incorrecto")
 
     @task(trigger_rule=TriggerRule.NONE_FAILED_MIN_ONE_SUCCESS)
-    def transform(
-            extract_data: IndicadorResponse,
-            ds: Optional[str] = None) -> str:
+    def transform(extract_data: IndicadorResponse) -> str:
         """
         Transforma los datos obtrenidos desde from mindicador.cl
         """
@@ -164,8 +171,8 @@ with DAG(
         return f"gs://{bucket}/{object_name}"
 
     indicators = Variable.get("indicators", deserialize_json=True)
+
     extract_data = extract.expand(indicator_type=indicators)
-    check_table_exists >> extract_data
     transform_data = transform.expand(extract_data=extract_data)
-    transform_data >> save_to_gcs(
-        transform_data) >> delete_from_table >> insert_to_table >> delete_file
+    gcs_data = save_to_gcs(transform_data)
+    gcs_data >> delete_from_table >> insert_to_table >> check_table >> delete_file
