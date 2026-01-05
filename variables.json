@@ -1,0 +1,20 @@
+{
+    "BUCKET_ID": "indicadores-bucket",
+    "DATASET_ID": "ds_indicadores",
+    "INDICATOR_TYPES": [
+        "uf",
+        "ivp",
+        "dolar",
+        "dolar_intercambio",
+        "euro",
+        "ipc",
+        "utm",
+        "imacec",
+        "tpm",
+        "libra_cobre",
+        "tasa_desempleo",
+        "bitcoin"
+    ],
+    "PROJECT_ID": "etl-indicadores",
+    "TABLE_ID": "tbl_indicadores"
+}

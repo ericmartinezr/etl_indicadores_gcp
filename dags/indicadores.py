@@ -5,6 +5,7 @@ import json
 from typing import Optional
 from pydantic import ValidationError
 from airflow import DAG
+from airflow.models import Variable
 from airflow.decorators import task
 from airflow.utils.trigger_rule import TriggerRule
 from airflow.utils.db import LazySelectSequence
@@ -20,22 +21,12 @@ from airflow.providers.google.cloud.operators.gcs import GCSDeleteObjectsOperato
 from schemas.indicador_response import IndicadorResponse
 
 
-# TODO: Move this to Variables?
-PROJECT_ID = "etl-indicadores"
-DATASET_ID = "ds_indicadores"
-TABLE_ID = "tbl_indicadores"
-BUCKET_ID = "indicadores-bucket"
-
-INDICATOR_TYPES = ["uf", "ivp", "dolar", "dolar_intercambio", "euro",
-                   "ipc", "utm", "imacec", "tpm", "libra_cobre", "tasa_desempleo",
-                   "bitcoin"]
-
 with DAG(
     dag_id="indicadores",
     schedule="@monthly",
     start_date=pendulum.datetime(2025, 12, 1, tz="UTC"),
     catchup=False,
-    max_active_runs=5,
+    max_active_runs=1,
     default_args={
         "retries": 1
     }
@@ -43,9 +34,9 @@ with DAG(
 
     check_table_exists = BigQueryTableExistenceSensor(
         task_id="check-table-exists",
-        project_id=PROJECT_ID,
-        dataset_id=DATASET_ID,
-        table_id=TABLE_ID,
+        project_id=Variable.get("project"),
+        dataset_id=Variable.get("dataset"),
+        table_id=Variable.get("table"),
         gcp_conn_id="google_cloud_default",
     )
 
@@ -55,9 +46,9 @@ with DAG(
                 "load": {
                     "sourceUris": ["{{ task_instance.xcom_pull(task_ids='save-to-gcs') }}"],
                     "destinationTable": {
-                        "projectId": PROJECT_ID,
-                        "datasetId": DATASET_ID,
-                        "tableId": TABLE_ID
+                        "projectId": Variable.get("project"),
+                        "datasetId": Variable.get("dataset"),
+                        "tableId": Variable.get("table")
                     },
                     "sourceFormat": "CSV",
                     "writeDisposition": "WRITE_APPEND",
@@ -69,7 +60,7 @@ with DAG(
 
     delete_file = GCSDeleteObjectsOperator(
         task_id="delete-file",
-        bucket_name=BUCKET_ID,
+        bucket_name=Variable.get("bucket"),
         objects=["{{ task_instance.xcom_pull(task_ids='save-to-gcs') }}"],
         gcp_conn_id="google_cloud_default",
     )
@@ -97,6 +88,7 @@ with DAG(
 
             res_json = IndicadorResponse.model_validate_json(
                 json.dumps(response.json()))
+
             if not res_json.serie:
                 # El mismo error anterior pero para un caso distinto
                 raise AirflowSkipException(
@@ -131,6 +123,7 @@ with DAG(
 
     @task(task_id='save-to-gcs')
     def save_to_gcs(sequence: LazySelectSequence, ds: Optional[str] = None) -> str:
+        bucket = Variable.get("bucket")
         rows = "\n".join([row for row in sequence])
         fecha = "".join([x for x in ds.split("-")])
         object_name = f"indicadores_{fecha}.csv"
@@ -139,15 +132,16 @@ with DAG(
             gcp_conn_id="google_cloud_default",
         )
         hook.upload(
-            bucket_name=BUCKET_ID,
+            bucket_name=bucket,
             object_name=object_name,
             data=rows,
             encoding="utf-8",
         )
 
-        return f"gs://{BUCKET_ID}/{object_name}"
+        return f"gs://{bucket}/{object_name}"
 
-    extract_data = extract.expand(indicator_type=INDICATOR_TYPES)
+    indicators = Variable.get("indicators", deserialize_json=True)
+    extract_data = extract.expand(indicator_type=indicators)
     check_table_exists >> extract_data
     transform_data = transform.expand(extract_data=extract_data)
     transform_data >> save_to_gcs(
