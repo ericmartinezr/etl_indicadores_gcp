@@ -20,7 +20,7 @@ from airflow.providers.google.cloud.operators.gcs import GCSDeleteObjectsOperato
 
 
 with DAG(
-    dag_id="indicadores_backfill",
+    dag_id="indicadores_backfill_no_schema",
     schedule="@yearly",
     # La API tiene datos desde 1928 (IPC) en adelante
     start_date=pendulum.datetime(1928, 1, 1, tz="UTC"),
