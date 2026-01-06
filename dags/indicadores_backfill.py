@@ -21,11 +21,13 @@ from schemas.indicador_response import IndicadorResponse
 
 
 with DAG(
-    dag_id="indicadores_backfill_v2",
+    dag_id="indicadores_backfill",
     schedule="@yearly",
-    start_date=pendulum.datetime(1977, 1, 1, tz="UTC"),
+    # La API tiene datos desde 1928 (IPC) en adelante
+    start_date=pendulum.datetime(2015, 1, 1, tz="UTC"),
+    end_date=pendulum.datetime(2023, 1, 1, tz="UTC"),
     catchup=True,
-    max_active_runs=3,
+    max_active_runs=2,
     default_args={
         "retries": 1,
         "email": [Variable.get("email")],
@@ -98,7 +100,8 @@ with DAG(
         gcp_conn_id="google_cloud_default",
     )
 
-    @task(pool="etl_api_mindicador_pool")
+    @task(pool="etl_api_mindicador_pool",
+          max_active_tis_per_dag=1)
     def extract(indicator_type: str, ds: Optional[str] = None) -> IndicadorResponse:
         """
         Extrae datos de indicadores desde mindicador.cl
@@ -113,7 +116,8 @@ with DAG(
             raise AirflowFailException(f"No existen datos para el año {yyyy}")
 
         try:
-            # Aparentemente si se pasa algun año sin datos (e.g., 1600) en vez de retornar un 404 o 500
+            # Aparentemente si se pasa alguna fecha sin datos (e.g., 1600-01-01)
+            # en vez de retornar un 404 o 500
             # simplemente retorna un json con el arreglo "serie" vacio
             res_json = IndicadorResponse.model_validate_json(
                 json.dumps(response.json()))
@@ -143,8 +147,11 @@ with DAG(
                                 nombre=extract_data.nombre,
                                 um=extract_data.unidad_medida,
                                 val=serie.valor,
-                                fecval=serie.fecha))
+                                fecval=serie.fecha[:10]))
 
+        # La API en algunos casos retorna valores duplicados
+        # Por ejemplo UF 2015-07-11
+        rows = list(set(rows))
         return "\n".join(rows)
 
     @task(task_id='save-to-gcs')

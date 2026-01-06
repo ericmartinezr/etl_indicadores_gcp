@@ -27,7 +27,7 @@
   },
   {
     "name": "fecha_valor",
-    "type": "TIMESTAMP",
+    "type": "DATE",
     "mode": "REQUIRED",
     "description": "Fecha del valor del indicador"
   }
