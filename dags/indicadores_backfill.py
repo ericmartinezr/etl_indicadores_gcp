@@ -24,8 +24,8 @@ with DAG(
     dag_id="indicadores_backfill",
     schedule="@yearly",
     # La API tiene datos desde 1928 (IPC) en adelante
-    start_date=pendulum.datetime(2015, 1, 1, tz="UTC"),
-    end_date=pendulum.datetime(2023, 1, 1, tz="UTC"),
+    start_date=pendulum.datetime(1928, 1, 1, tz="UTC"),
+    end_date=pendulum.datetime(2026, 1, 1, tz="UTC"),
     catchup=True,
     max_active_runs=2,
     default_args={
