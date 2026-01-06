@@ -10,6 +10,8 @@ Definición de variables comunes al proyecto
 export PROJECT_ID="etl-indicadores"
 export REGION="us-central1"
 export PROJECT_NUMBER=$(gcloud projects describe $PROJECT_ID --format="value(projectNumber)")
+export BQ_DATASET="ds_indicadores"
+export BQ_TABLE="tbl_indicadores"
 
 gcloud config set project $PROJECT_ID
 ```
@@ -35,6 +37,33 @@ gcloud projects add-iam-policy-binding $PROJECT_ID --member="serviceAccount:${SA
 
 ```sh
 gcloud iam service-accounts keys create /home/eric/.config/gcloud/airflow.json --iam-account=airflow-app-sa@etl-indicadores.iam.gserviceaccount.com
+```
+
+## Eliminar tabla y dataset (opcional)
+
+```sh
+bq rm --table=true $PROJECT_ID:$BQ_DATASET.$BQ_TABLE
+bq rm --dataset=true $PROJECT_ID:$BQ_DATASET
+```
+
+## Crear dataset y tabla en BigQuery
+
+```sh
+bq mk --dataset --location=$REGION $PROJECT_ID:$BQ_DATASET
+
+bq mk --table --clustering_fields=codigo,valor,fecha_valor \
+--description="Tabla con indicadores historicos" \
+--schema=./table_schema.json \
+$PROJECT_ID:$BQ_DATASET.$BQ_TABLE
+```
+
+## Dar permisos al usuario sobre el dataset
+
+Esto es necesario ya que si elimino el dataset y la tabla con el comando `bq`
+se pierden todos los permisos.
+
+```sh
+gcloud projects add-iam-policy-binding $PROJECT_ID --member="serviceAccount:${SA_EMAIL}" --role="roles/bigquery.dataEditor"
 ```
 
 ## Actualizar la librería cryptography

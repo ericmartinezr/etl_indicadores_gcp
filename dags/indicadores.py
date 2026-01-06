@@ -21,17 +21,16 @@ from schemas.indicador_response import IndicadorResponse
 
 
 with DAG(
-    dag_id="indicadores",
+    dag_id="indicadores_backfill_v2",
     schedule="@yearly",
-    start_date=pendulum.datetime(2025, 1, 1, tz="UTC"),
-    # end_date=pendulum.datetime(2026, 1, 5, tz="UTC"),
-    catchup=False,
-    max_active_runs=1,
+    start_date=pendulum.datetime(1977, 1, 1, tz="UTC"),
+    catchup=True,
+    max_active_runs=3,
     default_args={
         "retries": 1,
         "email": [Variable.get("email")],
         "email_on_failure": True,
-        "execution_timeout": timedelta(minutes=3)
+        "execution_timeout": timedelta(minutes=1)
     }
 ) as dag:
 

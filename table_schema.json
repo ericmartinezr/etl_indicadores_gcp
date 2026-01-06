@@ -1,0 +1,34 @@
+[
+  {
+    "name": "codigo",
+    "type": "STRING",
+    "mode": "REQUIRED",
+    "description": "Código del indicador"
+  },
+  {
+    "name": "nombre",
+    "type": "STRING",
+    "mode": "REQUIRED",
+    "description": "Nombre del indicador"
+  },
+  {
+    "name": "unidad_medida",
+    "type": "STRING",
+    "mode": "REQUIRED",
+    "description": "Unidad de medida del indicador"
+  },
+  {
+    "name": "valor",
+    "type": "BIGDECIMAL",
+    "mode": "REQUIRED",
+    "description": "Valor del indicador",
+    "scale": 12,
+    "precision": 20
+  },
+  {
+    "name": "fecha_valor",
+    "type": "TIMESTAMP",
+    "mode": "REQUIRED",
+    "description": "Fecha del valor del indicador"
+  }
+]
