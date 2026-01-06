@@ -34,6 +34,8 @@ gcloud projects add-iam-policy-binding $PROJECT_ID --member="serviceAccount:${SA
 gcloud projects add-iam-policy-binding $PROJECT_ID --member="serviceAccount:${SA_EMAIL}" --role="roles/bigquery.user"
 
 gcloud projects add-iam-policy-binding $PROJECT_ID --member="serviceAccount:${SA_EMAIL}" --role="roles/logging.logWriter"
+
+gcloud projects add-iam-policy-binding $PROJECT_ID --member="serviceAccount:${SA_EMAIL}" --role="roles/composer.worker"
 ```
 
 ## Generar el bucket
@@ -86,11 +88,11 @@ EMAIL="my.email@gmail.com"
 
 # Generar el ambiente de Composer
 gcloud composer environments create etl-indicadores \
-    --location us-central1 \
+    --location $REGION \
     --image-version composer-3-airflow-2.10.5-build.23 \
     --service-account "${SA_EMAIL}" \
-    --environment-size small \
-    --airflow-configs "smtp-smtp_host=smtp.gmail.com,smtp-smtp_starttls=True,smtp-smtp_ssl=False,smtp-smtp_user=${EMAIL},smtp-smtp_port=587,smtp-smtp_password_secret=smtp-password,smtp-smtp_mail_from=${EMAIL}"
+    --environment-size medium \
+    --airflow-configs "^|^smtp-smtp_host=smtp.gmail.com|smtp-smtp_starttls=True|smtp-smtp_ssl=False|smtp-smtp_user=${EMAIL}|smtp-smtp_port=587|smtp-smtp_password_secret=smtp-password|smtp-smtp_mail_from=${EMAIL}|core-allowed_deserialization_classes=airflow.*,schemas.indicador_response.IndicadorResponse,schemas.indicador_response.SerieIndicador"
 
 # Importar las variables de ambiente al almacenamiento interno de Airflow
 gcloud composer environments storage data import \
@@ -102,6 +104,20 @@ gcloud composer environments storage data import \
 gcloud composer environments run etl-indicadores \
     --location $REGION \
     variables import -- /home/airflow/gcs/data/variables.json
+
+# Agregar pool para Airflow
+gcloud composer environments run etl-indicadores \
+    --location $REGION \
+    pools set -- etl_api_mindicador_pool 2 "Pool para consumir API de mindicador.cl"
+
+# Aumentar la memoria del worker
+# Esto es debido a que me causa el error "Logs not found for Cloud Logging filter"
+# Ref: https://docs.cloud.google.com/composer/docs/composer-3/known-issues
+gcloud composer environments update etl-indicadores \
+    --location $REGION \
+    --worker-cpu 2 \
+    --worker-memory 4GB \
+    --worker-storage 2GB
 ```
 
 ## Variables de ambiente

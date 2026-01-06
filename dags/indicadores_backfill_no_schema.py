@@ -17,16 +17,16 @@ from airflow.providers.google.cloud.operators.bigquery import (
 )
 from airflow.providers.google.cloud.hooks.gcs import GCSHook
 from airflow.providers.google.cloud.operators.gcs import GCSDeleteObjectsOperator
-from airflow.macros import ds_format
-from schemas.indicador_response import IndicadorResponse
+
 
 with DAG(
-    dag_id="indicadores_daily_v1",
-    start_date=pendulum.datetime(2026, 1, 5, tz="UTC"),
-    # A las 9am cada dia
-    schedule_interval="0 9 * * *",
-    catchup=False,
-    max_active_runs=1,
+    dag_id="indicadores_backfill",
+    schedule="@yearly",
+    # La API tiene datos desde 1928 (IPC) en adelante
+    start_date=pendulum.datetime(1928, 1, 1, tz="UTC"),
+    end_date=pendulum.datetime(2026, 1, 1, tz="UTC"),
+    catchup=True,
+    max_active_runs=2,
     default_args={
         "retries": 1,
         "email": [Variable.get("email")],
@@ -63,13 +63,15 @@ with DAG(
             FROM 
                 `{{var.value.get('project')}}.{{var.value.get('dataset')}}.{{var.value.get('table')}}`
             WHERE
-                fecha_valor = "{{ ds }}"
+                fecha_valor 
+            BETWEEN
+                "{{macros.ds_format(ds, '%Y-%m-%d', '%Y')}}-01-01" and "{{macros.ds_format(ds, '%Y-%m-%d', '%Y')}}-12-31"
         """,
         use_legacy_sql=False,
         gcp_conn_id="google_cloud_default",
     )
 
-    # Elimina de BigQuery la fecha que se está procesando en caso de reproceso
+    # Elimina de BigQuery el periodo (año) que se está procesando en caso de reproceso
     delete_from_table = BigQueryInsertJobOperator(
         task_id="delete-from-fecha",
         configuration={
@@ -78,7 +80,9 @@ with DAG(
                     DELETE FROM 
                         `{{var.value.get('project')}}.{{var.value.get('dataset')}}.{{var.value.get('table')}}` 
                     WHERE 
-                        fecha_valor = "{{ ds }}"
+                        fecha_valor 
+                    BETWEEN 
+                        "{{macros.ds_format(ds, '%Y-%m-%d', '%Y')}}-01-01" and "{{macros.ds_format(ds, '%Y-%m-%d', '%Y')}}-12-31"
                     """,
                     "useLegacySql": False
                 }
@@ -95,31 +99,31 @@ with DAG(
         gcp_conn_id="google_cloud_default",
     )
 
-    @task(pool="etl_api_mindicador_pool")
-    def extract(indicator_type: str, ds: Optional[str] = None) -> IndicadorResponse:
+    @task(pool="etl_api_mindicador_pool",
+          max_active_tis_per_dag=1)
+    def extract(indicator_type: str, ds: Optional[str] = None) -> dict:
         """
         Extrae datos de indicadores desde mindicador.cl
         """
 
         # Obtiene el año del logical date
-        fecha = ds_format(ds, "%Y-%m-%d", "%d-%m-%Y")
-        api_url = f"https://mindicador.cl/api/{indicator_type}/{fecha}"
+        yyyy = ds.split("-")[0]
+        api_url = f"https://mindicador.cl/api/{indicator_type}/{yyyy}"
 
         response = httpx.get(api_url, timeout=60)
         if response.status_code != 200:
-            raise AirflowFailException(f"No existen datos para el dia {fecha}")
+            raise AirflowFailException(f"No existen datos para el año {yyyy}")
 
         try:
             # Aparentemente si se pasa alguna fecha sin datos (e.g., 1600-01-01)
             # en vez de retornar un 404 o 500
             # simplemente retorna un json con el arreglo "serie" vacio
-            res_json = IndicadorResponse.model_validate_json(
-                json.dumps(response.json()))
+            res_json = response.json()
 
-            if not res_json.serie:
+            if not res_json["serie"]:
                 # El mismo error anterior pero para un caso distinto
                 raise AirflowSkipException(
-                    f"No existen datos para el dia {fecha}")
+                    f"No existen datos para el año {yyyy}")
 
             return res_json
         except ValidationError as ve:
@@ -129,19 +133,19 @@ with DAG(
                 f"El formato de respuesta es incorrecto")
 
     @task(trigger_rule=TriggerRule.NONE_FAILED_MIN_ONE_SUCCESS)
-    def transform(extract_data: IndicadorResponse) -> str:
+    def transform(extract_data: dict) -> str:
         """
         Transforma los datos obtrenidos desde from mindicador.cl
         """
         rows = []
-        extract_serie = extract_data.serie
+        extract_serie = extract_data["serie"]
         for serie in extract_serie:
             rows.append("{codigo},{nombre},{um},{val},{fecval}"
-                        .format(codigo=extract_data.codigo,
-                                nombre=extract_data.nombre,
-                                um=extract_data.unidad_medida,
-                                val=serie.valor,
-                                fecval=serie.fecha[:10]))
+                        .format(codigo=extract_data["codigo"],
+                                nombre=extract_data["nombre"],
+                                um=extract_data["unidad_medida"],
+                                val=serie["valor"],
+                                fecval=serie["fecha"][:10]))
 
         # La API en algunos casos retorna valores duplicados
         # Por ejemplo UF 2015-07-11
