@@ -17,6 +17,9 @@ steps:
         '--dags_bucket=${_DAGS_BUCKET}',
       ]
 
+options:
+  logging: CLOUD_LOGGING_ONLY
+
 substitutions:
   _DAGS_DIRECTORY: 'dags/'
   _DAGS_BUCKET: 'us-central1-etl-indicadores-9e214f87-bucket'
