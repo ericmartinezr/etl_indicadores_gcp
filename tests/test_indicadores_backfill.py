@@ -2,7 +2,6 @@ import pytest
 from airflow.models import DagBag
 from airflow import DAG
 
-
 PROJECT_ID = "etl-indicadores"
 DATASET_ID = "ds_indicadores"
 TABLE_ID = "tbl_indicadores"
@@ -15,7 +14,7 @@ def dagbag() -> DagBag:
 
 @pytest.fixture()
 def dag(dagbag: DagBag) -> (DAG | None):
-    return dagbag.get_dag(dag_id="indicadores_no_schema")
+    return dagbag.get_dag(dag_id="indicadores_backfill")
 
 
 def test_dag(dag, dagbag):
@@ -39,13 +38,13 @@ def assert_dag_dict_equal(source, dag):
 def test_dag_structure(dag):
     assert_dag_dict_equal(
         {
+            "insert-to-table": ["check-table"],
+            "check-table": ["delete-file"],
+            "delete-from-table": ["insert-to-table"],
+            "delete-file": [],
             "extract": ["transform"],
             "transform": ["save-to-gcs"],
             "save-to-gcs": ["delete-from-table"],
-            "delete-from-table": ["insert-to-table"],
-            "insert-to-table": ["check-table"],
-            "check-table": ["delete-file"],
-            "delete-file": [],
         },
         dag,
     )
