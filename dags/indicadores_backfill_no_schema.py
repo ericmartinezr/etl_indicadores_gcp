@@ -73,7 +73,7 @@ with DAG(
 
     # Elimina de BigQuery el periodo (año) que se está procesando en caso de reproceso
     delete_from_table = BigQueryInsertJobOperator(
-        task_id="delete-from-fecha",
+        task_id="delete-from-table",
         configuration={
                 "query": {
                     "query": """

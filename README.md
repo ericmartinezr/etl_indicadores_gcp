@@ -30,11 +30,8 @@ SA_EMAIL="airflow-app-sa@${PROJECT_ID}.iam.gserviceaccount.com"
 
 ```sh
 gcloud projects add-iam-policy-binding $PROJECT_ID --member="serviceAccount:${SA_EMAIL}" --role="roles/storage.objectUser"
-
 gcloud projects add-iam-policy-binding $PROJECT_ID --member="serviceAccount:${SA_EMAIL}" --role="roles/bigquery.user"
-
 gcloud projects add-iam-policy-binding $PROJECT_ID --member="serviceAccount:${SA_EMAIL}" --role="roles/logging.logWriter"
-
 gcloud projects add-iam-policy-binding $PROJECT_ID --member="serviceAccount:${SA_EMAIL}" --role="roles/composer.worker"
 ```
 
@@ -87,16 +84,18 @@ Específicamente Composer
 EMAIL="my.email@gmail.com"
 
 # Generar el ambiente de Composer
-# Aumenta la memoria del worker ya que me causa el error "Logs not found for Cloud Logging filter"
+# Aumenta la memoria del worker en caso de ver el error "Logs not found for Cloud Logging filter"
+# Ejemplo:
+#    --worker-cpu 2 \
+#    --worker-memory 4GB \
+#    --worker-storage 2GB \
 # Ref: https://docs.cloud.google.com/composer/docs/composer-3/known-issues
 gcloud composer environments create etl-indicadores \
     --location $REGION \
     --image-version composer-3-airflow-2.10.5-build.23 \
     --service-account "${SA_EMAIL}" \
     --environment-size medium \
-    --worker-cpu 2 \
-    --worker-memory 4GB \
-    --worker-storage 2GB \
+
     --airflow-configs "^|^smtp-smtp_host=smtp.gmail.com|smtp-smtp_starttls=True|smtp-smtp_ssl=False|smtp-smtp_user=${EMAIL}|smtp-smtp_port=587|smtp-smtp_password_secret=smtp-password|smtp-smtp_mail_from=${EMAIL}|core-allowed_deserialization_classes=airflow.*,schemas.indicador_response.IndicadorResponse,schemas.indicador_response.SerieIndicador"
 
 # Importar las variables de ambiente al almacenamiento interno de Airflow
@@ -122,13 +121,9 @@ Nota: lamentablemente no logré hacer funcionar la serialización de los schemas
 
 Debido a esto agregué las versiones de cada DAG sin schemas.
 
-## Variables de ambiente
-
-Agregar tal cual como se ve en el archivo **[variables.json](variables.json)** (llave -> valor)
-
 ## SMTP
 
-Las variables se deben asignar en la sección `Airflow configuration overrides`. En este caso Composer no permite setear la variable `smtp_password` ya estas variables quedan como texto plano en airflow.cfg. Para setear la password se usa otro método usando las variables `smtp_password_cmd` o `smtp_password_secret`.
+Las variables se deben asignar en la sección `Airflow configuration overrides`. En este caso Composer no permite setear la variable `smtp_password` debido a que quedan como texto plano en airflow.cfg lo que es inseguro. Para setear la password se usa otro método usando las variables `smtp_password_cmd` o `smtp_password_secret`.
 
 Por conveniencia usé la segunda opción: `smtp_password_secret`
 

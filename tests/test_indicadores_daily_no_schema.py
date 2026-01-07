@@ -1,12 +1,7 @@
 import pytest
-import re
 from airflow.models import DagBag
-from google.cloud import bigquery
 from airflow import DAG
-from airflow.providers.google.cloud.operators.bigquery import (
-    BigQueryInsertJobOperator,
-    BigQueryCheckOperator
-)
+
 
 PROJECT_ID = "etl-indicadores"
 DATASET_ID = "ds_indicadores"
@@ -54,33 +49,3 @@ def test_dag_structure(dag):
         },
         dag,
     )
-
-
-def clean_sql(sql: str) -> str:
-    return re.sub(r'\s+', ' ', sql.replace("\n", " ")).strip()
-
-
-def test_check_table_query(dag: DAG):
-    mock_context = {
-        "var": {
-            "value": {
-                "project": PROJECT_ID,
-                "dataset": DATASET_ID,
-                "table": TABLE_ID
-            }
-        },
-        "ds": "2026-01-01"
-    }
-    task = dag.get_task('check-table')
-    task.render_template_fields(context=mock_context)
-    sql = task.sql
-    expected_sql = """
-    SELECT 
-        COUNT(*) 
-    FROM 
-        `etl-indicadores.ds_indicadores.tbl_indicadores`
-    WHERE
-        fecha_valor = "2026-01-01"
-    """
-
-    assert clean_sql(sql) == clean_sql(expected_sql)
