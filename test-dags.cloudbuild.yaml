@@ -1,0 +1,10 @@
+# Configuracion de Cloud Build para ejecutar pruebas unitarias en DAGs de Airflow
+
+steps:
+  - name: python:3.11-slim
+    entrypoint: pip
+    args: ['install', '-r', 'requirements.txt', '--user']
+
+  - name: python:3.11-slim
+    entrypoint: python3.11
+    args: ['-m', 'pytest', '-s', 'dags/']
