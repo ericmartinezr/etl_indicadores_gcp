@@ -24,7 +24,7 @@ with DAG(
     dag_id="indicadores_daily_v1",
     start_date=pendulum.datetime(2026, 1, 5, tz="UTC"),
     # A las 9am cada dia
-    schedule_interval="0 9 * * *",
+    schedule="0 9 * * *",
     catchup=False,
     max_active_runs=1,
     default_args={

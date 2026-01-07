@@ -23,7 +23,7 @@ with DAG(
     dag_id="indicadores_no_schema",
     start_date=pendulum.datetime(2026, 1, 5, tz="UTC"),
     # A las 9am cada dia
-    schedule_interval="0 9 * * *",
+    schedule="0 9 * * *",
     catchup=False,
     max_active_runs=1,
     default_args={
@@ -70,7 +70,7 @@ with DAG(
 
     # Elimina de BigQuery la fecha que se está procesando en caso de reproceso
     delete_from_table = BigQueryInsertJobOperator(
-        task_id="delete-from-fecha",
+        task_id="delete-from-table",
         configuration={
                 "query": {
                     "query": """
