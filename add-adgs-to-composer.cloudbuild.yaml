@@ -3,15 +3,21 @@
 
 steps:
   # install dependencies
-  - name: python
-    entrypoint: pip
-    args: ['install', '-r', 'utils/requirements.txt', '--user']
+  #- name: python
+  #  entrypoint: pip
+  #  args: ['install', '-r', 'utils/requirements.txt', '--user']
+
+  - name: 'ghcr.io/astral-sh/uv:latest'
+    entrypoint: 'uv'
+    args:
+      ['pip', 'install', '--system', '-r', 'utils/requirements.txt', '--user']
 
   # run
-  - name: python
-    entrypoint: python
+  - name: 'ghcr.io/astral-sh/uv:latest'
+    entrypoint: uv
     args:
       [
+        'python',
         'utils/add_dags_to_composer.py',
         '--dags_directory=${_DAGS_DIRECTORY}',
         '--dags_bucket=${_DAGS_BUCKET}',

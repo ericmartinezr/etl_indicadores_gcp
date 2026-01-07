@@ -2,12 +2,13 @@
 # https://docs.cloud.google.com/composer/docs/composer-3/dag-cicd-github
 
 steps:
-  - name: python:3.11-slim
+  - name: python:3.8-slim
     entrypoint: pip
-    args: ['install', '-r', 'requirements.txt', '--user']
+    args:
+      ['install', '-r', 'requirements.txt', '-c', 'constraints.txt', '--user']
 
-  - name: python:3.11-slim
-    entrypoint: python3.11
+  - name: python:3.8-slim
+    entrypoint: python3.8
     args: ['-m', 'pytest', '-s', 'dags/']
 
 options:
