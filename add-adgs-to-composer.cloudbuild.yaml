@@ -1,0 +1,24 @@
+# Original source
+# https://docs.cloud.google.com/composer/docs/composer-3/dag-cicd-github
+
+steps:
+  # install dependencies
+  - name: python
+    entrypoint: pip
+    args: ['install', '-r', 'utils/requirements.txt', '--user']
+
+  # run
+  - name: python
+    entrypoint: python
+    args:
+      [
+        'utils/add_dags_to_composer.py',
+        '--dags_directory=${_DAGS_DIRECTORY}',
+        '--dags_bucket=${_DAGS_BUCKET}',
+      ]
+
+substitutions:
+  _DAGS_DIRECTORY: 'dags/'
+  _DAGS_BUCKET: 'us-central1-etl-indicadores-9e214f87-bucket'
+
+timeout: '1800s'

@@ -1,4 +1,5 @@
-# Configuracion de Cloud Build para ejecutar pruebas unitarias en DAGs de Airflow
+# Original source
+# https://docs.cloud.google.com/composer/docs/composer-3/dag-cicd-github
 
 steps:
   - name: python:3.11-slim
