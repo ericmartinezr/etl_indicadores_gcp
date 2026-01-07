@@ -2,22 +2,14 @@
 # https://docs.cloud.google.com/composer/docs/composer-3/dag-cicd-github
 
 steps:
-  # install dependencies
-  #- name: python
-  #  entrypoint: pip
-  #  args: ['install', '-r', 'utils/requirements.txt', '--user']
+  - name: python:3.11-slim
+    entrypoint: pip
+    args: ['install', '-r', 'utils/requirements.txt', '--user']
 
-  - name: 'ghcr.io/astral-sh/uv:latest'
-    entrypoint: 'uv'
-    args:
-      ['pip', 'install', '--system', '-r', 'utils/requirements.txt', '--user']
-
-  # run
-  - name: 'ghcr.io/astral-sh/uv:latest'
-    entrypoint: uv
+  - name: python:3.11-slim
+    entrypoint: python
     args:
       [
-        'python',
         'utils/add_dags_to_composer.py',
         '--dags_directory=${_DAGS_DIRECTORY}',
         '--dags_bucket=${_DAGS_BUCKET}',
