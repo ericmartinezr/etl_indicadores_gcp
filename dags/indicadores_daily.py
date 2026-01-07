@@ -18,10 +18,9 @@ from airflow.providers.google.cloud.operators.bigquery import (
 from airflow.providers.google.cloud.hooks.gcs import GCSHook
 from airflow.providers.google.cloud.operators.gcs import GCSDeleteObjectsOperator
 from airflow.macros import ds_format
-from schemas.indicador_response import IndicadorResponse
 
 with DAG(
-    dag_id="indicadores_daily_v1",
+    dag_id="indicadores_daily",
     start_date=pendulum.datetime(2026, 1, 5, tz="UTC"),
     # A las 9am cada dia
     schedule="0 9 * * *",
@@ -71,7 +70,7 @@ with DAG(
 
     # Elimina de BigQuery la fecha que se está procesando en caso de reproceso
     delete_from_table = BigQueryInsertJobOperator(
-        task_id="delete-from-fecha",
+        task_id="delete-from-table",
         configuration={
                 "query": {
                     "query": """
@@ -96,7 +95,7 @@ with DAG(
     )
 
     @task(pool="etl_api_mindicador_pool")
-    def extract(indicator_type: str, ds: Optional[str] = None) -> IndicadorResponse:
+    def extract(indicator_type: str, ds: Optional[str] = None) -> dict:
         """
         Extrae datos de indicadores desde mindicador.cl
         """
@@ -113,10 +112,9 @@ with DAG(
             # Aparentemente si se pasa alguna fecha sin datos (e.g., 1600-01-01)
             # en vez de retornar un 404 o 500
             # simplemente retorna un json con el arreglo "serie" vacio
-            res_json = IndicadorResponse.model_validate_json(
-                json.dumps(response.json()))
+            res_json = response.json()
 
-            if not res_json.serie:
+            if not res_json["serie"]:
                 # El mismo error anterior pero para un caso distinto
                 raise AirflowSkipException(
                     f"No existen datos para el dia {fecha}")
@@ -129,19 +127,19 @@ with DAG(
                 f"El formato de respuesta es incorrecto")
 
     @task(trigger_rule=TriggerRule.NONE_FAILED_MIN_ONE_SUCCESS)
-    def transform(extract_data: IndicadorResponse) -> str:
+    def transform(extract_data: dict) -> str:
         """
         Transforma los datos obtrenidos desde from mindicador.cl
         """
         rows = []
-        extract_serie = extract_data.serie
+        extract_serie = extract_data["serie"]
         for serie in extract_serie:
             rows.append("{codigo},{nombre},{um},{val},{fecval}"
-                        .format(codigo=extract_data.codigo,
-                                nombre=extract_data.nombre,
-                                um=extract_data.unidad_medida,
-                                val=serie.valor,
-                                fecval=serie.fecha[:10]))
+                        .format(codigo=extract_data["codigo"],
+                                nombre=extract_data["nombre"],
+                                um=extract_data["unidad_medida"],
+                                val=serie["valor"],
+                                fecval=serie["fecha"][:10]))
 
         # La API en algunos casos retorna valores duplicados
         # Por ejemplo UF 2015-07-11
