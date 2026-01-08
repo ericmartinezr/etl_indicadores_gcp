@@ -83,11 +83,6 @@ Específicamente Composer
 EMAIL="my.email@gmail.com"
 
 # Generar el ambiente de Composer
-# Aumenta la memoria del worker en caso de ver el error "Logs not found for Cloud Logging filter"
-# Ejemplo:
-#    --worker-cpu 2 \
-#    --worker-memory 4GB \
-#    --worker-storage 2GB \
 # Ref: https://docs.cloud.google.com/composer/docs/composer-3/known-issues
 gcloud composer environments create etl-indicadores \
     --location $REGION \
