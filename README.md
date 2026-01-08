@@ -46,7 +46,7 @@ gcloud projects add-iam-policy-binding $PROJECT_ID --member="serviceAccount:${SA
 gcloud projects add-iam-policy-binding $PROJECT_ID --member="serviceAccount:${SA_EMAIL_AF}" --role="roles/composer.worker"
 ```
 
-## Crear una cuenta de servicio para Cloud Build y asignarle permisos sobre Cloud Build y Logging
+## Crear una cuenta de servicio para Cloud Build y asignarle permisos sobre Cloud Storage, Cloud Build y Logging
 
 ```sh
 gcloud iam service-accounts create cloudbuild-app-sa \
@@ -60,7 +60,7 @@ gcloud projects add-iam-policy-binding $PROJECT_ID --member="serviceAccount:${SA
 gcloud projects add-iam-policy-binding $PROJECT_ID --member="serviceAccount:${SA_EMAIL_CB}" --role="roles/logging.logWriter"
 ```
 
-- Referencia: para ver configuración de Cloud Build que no se abarca en este documento ver https://docs.cloud.google.com/composer/docs/composer-3/dag-cicd-github
+- Referencia: para ver configuración de Cloud Build que no se abarca en este documento: https://docs.cloud.google.com/composer/docs/composer-3/dag-cicd-github
 
 ## Eliminar tabla y dataset (opcional)
 
