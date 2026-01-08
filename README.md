@@ -1,6 +1,6 @@
 # Proyecto de ETL de indicadores de Chile en GCP
 
-_Este proyecto utiliza la API https://mindicadores.cl. Ajusté las configuraciones de los DAGs para no consumirlo en exceso (con pools) y evitar colapsarlo._
+_Este proyecto utiliza la API https://mindicador.cl. Ajusté las configuraciones de los DAGs para no consumirlo en exceso (con pools) y evitar colapsarlo._
 
 ---
 
