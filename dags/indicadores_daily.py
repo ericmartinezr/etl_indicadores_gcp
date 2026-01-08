@@ -21,16 +21,16 @@ from airflow.macros import ds_format
 
 with DAG(
     dag_id="indicadores_daily",
-    start_date=pendulum.datetime(2026, 1, 5, tz="UTC"),
+    start_date=pendulum.datetime(2026, 1, 1, tz="UTC"),
     # A las 9am cada dia
     schedule="0 9 * * *",
     catchup=False,
     max_active_runs=1,
     default_args={
         "retries": 1,
+        "retry_delay": timedelta(seconds=15),
         "email": [Variable.get("email")],
         "email_on_failure": True,
-        "execution_timeout": timedelta(minutes=1)
     }
 ) as dag:
 
@@ -94,7 +94,10 @@ with DAG(
         gcp_conn_id="google_cloud_default",
     )
 
-    @task(pool="etl_api_mindicador_pool")
+    @task(
+        pool="etl_api_mindicador_pool",
+        execution_timeout=timedelta(seconds=60)
+    )
     def extract(indicator_type: str, ds: Optional[str] = None) -> dict:
         """
         Extrae datos de indicadores desde mindicador.cl
@@ -104,20 +107,22 @@ with DAG(
         fecha = ds_format(ds, "%Y-%m-%d", "%d-%m-%Y")
         api_url = f"https://mindicador.cl/api/{indicator_type}/{fecha}"
 
-        response = httpx.get(api_url, timeout=30)
-        if response.status_code != 200:
-            raise AirflowFailException(f"No existen datos para el dia {fecha}")
-
         try:
-            # Aparentemente si se pasa alguna fecha sin datos (e.g., 1600-01-01)
-            # en vez de retornar un 404 o 500
-            # simplemente retorna un json con el arreglo "serie" vacio
-            res_json = response.json()
+            with httpx.Client() as client:
+                response = client.get(api_url, timeout=30)
+                if response.status_code != 200:
+                    raise AirflowFailException(
+                        f"No existen datos para el dia {fecha}")
 
-            if not res_json["serie"]:
-                # El mismo error anterior pero para un caso distinto
-                raise AirflowSkipException(
-                    f"No existen datos para el dia {fecha}")
+                # Aparentemente si se pasa alguna fecha sin datos (e.g., 1600-01-01)
+                # en vez de retornar un 404 o 500
+                # simplemente retorna un json con el arreglo "serie" vacio
+                res_json = response.json()
+
+                if not res_json["serie"]:
+                    # El mismo error anterior pero para un caso distinto
+                    raise AirflowSkipException(
+                        f"No existen datos para el dia {fecha}")
 
             return res_json
         except ValidationError as ve:
@@ -126,7 +131,10 @@ with DAG(
             raise AirflowFailException(
                 f"El formato de respuesta es incorrecto")
 
-    @task(trigger_rule=TriggerRule.NONE_FAILED_MIN_ONE_SUCCESS)
+    @task(
+        trigger_rule=TriggerRule.NONE_FAILED_MIN_ONE_SUCCESS,
+        execution_timeout=timedelta(seconds=60)
+    )
     def transform(extract_data: dict) -> str:
         """
         Transforma los datos obtrenidos desde from mindicador.cl
@@ -146,7 +154,10 @@ with DAG(
         rows = list(set(rows))
         return "\n".join(rows)
 
-    @task(task_id='save-to-gcs')
+    @task(
+        task_id='save-to-gcs',
+        execution_timeout=timedelta(seconds=60)
+    )
     def save_to_gcs(sequence: LazySelectSequence, ds: Optional[str] = None) -> str:
         """"
         Guarda el resultado en un archivo en Cloud Storage

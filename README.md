@@ -1,8 +1,24 @@
 # Proyecto de ETL de indicadores de Chile en GCP
 
-Estos comandos son para uso local. Para el uso en GCP se debe utilizar el archivo cloudbuild.yaml.
+_Este proyecto utiliza la API https://mindicadores.cl. Ajusté las configuraciones de los DAGs para no consumirlo en exceso (con pools) y evitar colapsarlo._
 
-# Configuración común (GCP y local)
+---
+
+Estos comandos son de uso común para la ejecución en GCP como en local.
+La estructura del proyecto es una variación del presentado en el siguiente enlace: https://docs.cloud.google.com/composer/docs/composer-3/dag-cicd-github.
+
+Este proyecto utiliza Cloud Build para el despliegue y traspaso de DAGs al ambiente en Composer. Sigue la misma lógica del build `add-dags-to-composer` en el enlace anterior:
+
+- Modificar DAGs
+- Pushear a master
+- Ejecutar los tests
+- Mover los DAGs a Composer
+
+Si no hay modificaciones en los DAGs el build no se ejecuta, aunque hayan cambios en otros archivos.
+
+Existen 2 dags con lógica interna casi idéntica. Para simplificar el desarrollo y las pruebas en ambientes GCP se separó en 2 DAGs con la pequeña diferencia que el DAG `indicadores_backfill` se ejecuta de forma anual desde 1928 hasta 2026. En cambio el DAG `indicadores_daily` se ejecuta de forma diaria una vez al día a las 9am. Esto también afecta el como cada DAG consume la API.
+
+# Configuración común
 
 Definición de variables comunes al proyecto
 
@@ -66,6 +82,12 @@ bq mk --table --clustering_fields=codigo,valor,fecha_valor \
 $PROJECT_ID:$BQ_DATASET.$BQ_TABLE
 ```
 
+Se usaron campos `clustering` en vez de particiones debido a la siguiente regla
+
+> Partitioning results in a small amount of data per partition (approximately less than 10 GB). Creating many small partitions increases the table's metadata, and can affect metadata access times when querying the table.
+
+Referencia: https://docs.cloud.google.com/bigquery/docs/partitioned-tables
+
 ## Dar permisos al usuario sobre el dataset
 
 Esto es necesario ya que si elimino el dataset y la tabla con el comando `bq`
@@ -77,168 +99,8 @@ gcloud projects add-iam-policy-binding $PROJECT_ID --member="serviceAccount:${SA
 
 # Configuración GCP
 
-Específicamente Composer
-
-```sh
-EMAIL="my.email@gmail.com"
-
-# Generar el ambiente de Composer
-# Ref: https://docs.cloud.google.com/composer/docs/composer-3/known-issues
-gcloud composer environments create etl-indicadores \
-    --location $REGION \
-    --image-version composer-3-airflow-2.10.5-build.23 \
-    --service-account "${SA_EMAIL_AF}" \
-    --environment-size large \
-    --airflow-configs "^|^smtp-smtp_host=smtp.gmail.com|smtp-smtp_starttls=True|smtp-smtp_ssl=False|smtp-smtp_user=${EMAIL}|smtp-smtp_port=587|smtp-smtp_password_secret=smtp-password|smtp-smtp_mail_from=${EMAIL}"
-
-# Importar las variables de ambiente al almacenamiento interno de Airflow
-gcloud composer environments storage data import \
-    --environment etl-indicadores \
-    --location $REGION \
-    --source=variables.json
-
-# Cargar las variables en Airflow
-gcloud composer environments run etl-indicadores \
-    --location $REGION \
-    variables import -- /home/airflow/gcs/data/variables.json
-
-# Agregar pool para Airflow
-gcloud composer environments run etl-indicadores \
-    --location $REGION \
-    pools set -- etl_api_mindicador_pool 2 "Pool para consumir API de mindicador.cl"
-```
-
-## SMTP
-
-Las variables se deben asignar en la sección `Airflow configuration overrides`. En este caso Composer no permite setear la variable `smtp_password` debido a que quedan como texto plano en airflow.cfg lo que es inseguro. Para setear la password se usa otro método usando las variables `smtp_password_cmd` o `smtp_password_secret`.
-
-Por conveniencia usé la segunda opción: `smtp_password_secret`
-
-```sh
-# Crear secreto con el password del smtp
-echo -n "SMTP_PASSWORD" | gcloud secrets create \
-  airflow-config-smtp-password \
-  --data-file=- \
-  --replication-policy=user-managed
-  --locations=$REGION
-```
-
-- Referencia: https://docs.cloud.google.com/composer/docs/composer-3/configure-email#smtp_password
+### Ver documento **[GCP](GCP.md)**
 
 # Configuración local
 
-## Generar una llave para uso local
-
-```sh
-gcloud iam service-accounts keys create /home/eric/.config/gcloud/airflow.json --iam-account=airflow-app-sa@etl-indicadores.iam.gserviceaccount.com
-```
-
-## Actualizar la librería cryptography
-
-Si se ve el siguiente mensaje de error
-
-```
-{processor.py:401} WARNING - Error when trying to pre-import module 'airflow.providers.google.cloud.operators.bigquery' found in <dag.py>: cffi library '_openssl' has no function, constant or global variable named 'Cryptography_HAS_SSL_VERIFY_CLIENT_POST_HANDSHAKE
-```
-
-Se debe ejecutar este comando
-
-```sh
-pip install --upgrade --force-reinstall --no-cache-dir cryptography pyOpenSSL cffi
-```
-
-## Instalar uv
-
-Necesario para instalar la version espeficia que usa Composer 3
-
-```sh
-AIRFLOW_VERSION=2.10.5
-PYTHON_VERSION=3.11
-CONSTRAINT_URL="https://raw.githubusercontent.com/apache/airflow/constraints-${AIRFLOW_VERSION}/constraints-${PYTHON_VERSION}.txt"
-
-
-curl -LsSf https://astral.sh/uv/install.sh | sh
-uv python install 3.11.8
-uv venv .venv --python 3.11.8
-source .venv/bin/activate
-uv pip install "apache-airflow[google]==${AIRFLOW_VERSION}" --constraint "${CONSTRAINT_URL}"
-uv pip install psycopg2
-```
-
-## Crear usuario admin
-
-```sh
-airflow db migrate
-
-airflow users create --username admin --password admin --role Admin --firstname admin --lastname admin --email admin@admin.com
-```
-
-## Resetear usuario admin (opcional si hay problemas)
-
-```sh
-airflow db reset
-
-airflow users create --username admin --password admin --role Admin --firstname admin --lastname admin --email admin@admin.com
-```
-
----
-
-## Iniciar el webserver en modo daemon
-
-```sh
-airflow webserver --port 8080 -D
-airflow scheduler -D
-```
-
-## Para detener el webserver
-
-```sh
-# Detener el webserver
-kill $(cat ~/airflow/airflow-webserver.pid)
-
-# Detener el scheduler
-kill $(cat ~/airflow/airflow-scheduler.pid)
-
-# Detener lo que quede vivo del webserver
-ps aux | grep airflow | grep -v grep | awk '{print $2}' | xargs kill -9
-
-# Detener lo que quede vivo del scheduler
-lsof -i :8793 | sed 1d |  awk '{print $2}' | xargs kill -9
-```
-
-## Conexión GCP
-
-En teoría esto debería ser solo en local.
-
-> Admin > Connections
-
-Buscar y editar `google_cloud_default`.
-En el campo `Keyfile Path` ingresar `/home/eric/.config/gcloud/airflow.json` (la ruta donde se generó el key del paso más arriba)
-
-## SMTP
-
-Bajo la configuración `[smtp]` se configuró con el SMTP de Gmail usando una App Password
-
-## Pool
-
-Para evitar colapsar la API se asignó un pool de 3 slots. Esto se realiza desde la interfaz gráfica `Admin -> Pools`. Luego se referencia en el `@task` que realiza la consulta a la API.
-
-## Serialización
-
-Ya que estoy usando schemas de Pydantic es necesario registrarlos en la configuración para que Airflow pueda serializarlos/deserializarlos
-
-```sh
-nano ~/airflow/airflow.cfg
-
-# Buscar la linea allowed_deserialization_classes
-# Separar por coma
-allowed_deserialization_classes = airflow.*, schemas.indicador_response.*
-```
-
-# Testing
-
-Ejecutar los tests
-
-```sh
-python -m pytest ./tests
-```
+### Ver documento **[LOCAL](LOCAL.md)**
