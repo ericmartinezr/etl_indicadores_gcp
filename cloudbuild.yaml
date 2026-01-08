@@ -36,6 +36,6 @@ options:
 
 substitutions:
   _DAGS_DIRECTORY: 'dags/'
-  _DAGS_BUCKET: 'us-central1-etl-indicadores-9e214f87-bucket'
+  _DAGS_BUCKET: 'us-central1-etl-indicadores-2daa3ec9-bucket'
 
 timeout: '1800s'
