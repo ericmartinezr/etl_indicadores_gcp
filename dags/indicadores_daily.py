@@ -104,7 +104,7 @@ with DAG(
         fecha = ds_format(ds, "%Y-%m-%d", "%d-%m-%Y")
         api_url = f"https://mindicador.cl/api/{indicator_type}/{fecha}"
 
-        response = httpx.get(api_url, timeout=60)
+        response = httpx.get(api_url, timeout=30)
         if response.status_code != 200:
             raise AirflowFailException(f"No existen datos para el dia {fecha}")
 

@@ -1,0 +1,41 @@
+# Variacion de la version en el siguiente enlace
+# https://docs.cloud.google.com/composer/docs/composer-3/dag-cicd-github
+
+steps:
+  - name: python:3.11-slim
+    id: 'airflow-tests'
+    entrypoint: /bin/bash
+    args:
+      - -c
+      - |
+        pip install --user -r requirements.txt -c constraints.txt
+
+        export PATH="$$PATH:/builder/home/.local/bin"
+
+        export AIRFLOW_HOME=$$(pwd)
+        export PYTHONPATH=$$PYTHONPATH:$$(pwd)
+
+        airflow db init
+
+        python3 -m pytest -s tests/
+    waitFor: ['-']
+
+  - name: python:3.11-slim
+    id: 'deploy-dags-to-composer'
+    entrypoint: python
+    args:
+      [
+        'utils/add_dags_to_composer.py',
+        '--dags_directory=${_DAGS_DIRECTORY}',
+        '--dags_bucket=${_DAGS_BUCKET}',
+      ]
+    waitFor: ['airflow-tests']
+
+options:
+  logging: CLOUD_LOGGING_ONLY
+
+substitutions:
+  _DAGS_DIRECTORY: 'dags/'
+  _DAGS_BUCKET: 'us-central1-etl-indicadores-9e214f87-bucket'
+
+timeout: '1800s'

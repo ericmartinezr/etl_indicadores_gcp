@@ -109,7 +109,7 @@ with DAG(
         yyyy = ds.split("-")[0]
         api_url = f"https://mindicador.cl/api/{indicator_type}/{yyyy}"
 
-        response = httpx.get(api_url, timeout=60)
+        response = httpx.get(api_url, timeout=30)
         if response.status_code != 200:
             raise AirflowFailException(f"No existen datos para el año {yyyy}")
 

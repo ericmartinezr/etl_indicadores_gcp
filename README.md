@@ -93,8 +93,8 @@ gcloud composer environments create etl-indicadores \
     --location $REGION \
     --image-version composer-3-airflow-2.10.5-build.23 \
     --service-account "${SA_EMAIL_AF}" \
-    --environment-size medium \
-    --airflow-configs "^|^smtp-smtp_host=smtp.gmail.com|smtp-smtp_starttls=True|smtp-smtp_ssl=False|smtp-smtp_user=${EMAIL}|smtp-smtp_port=587|smtp-smtp_password_secret=smtp-password|smtp-smtp_mail_from=${EMAIL}|core-allowed_deserialization_classes=airflow.*,schemas.indicador_response.IndicadorResponse,schemas.indicador_response.SerieIndicador"
+    --environment-size large \
+    --airflow-configs "^|^smtp-smtp_host=smtp.gmail.com|smtp-smtp_starttls=True|smtp-smtp_ssl=False|smtp-smtp_user=${EMAIL}|smtp-smtp_port=587|smtp-smtp_password_secret=smtp-password|smtp-smtp_mail_from=${EMAIL}"
 
 # Importar las variables de ambiente al almacenamiento interno de Airflow
 gcloud composer environments storage data import \
@@ -112,12 +112,6 @@ gcloud composer environments run etl-indicadores \
     --location $REGION \
     pools set -- etl_api_mindicador_pool 2 "Pool para consumir API de mindicador.cl"
 ```
-
-Nota: lamentablemente no logré hacer funcionar la serialización de los schemas. Igualmente los dejé en el comando por si en un futuro hallo la forma.
-
-> core-allowed_deserialization_classes=airflow.\*,schemas.indicador_response.IndicadorResponse,schemas.indicador_response.SerieIndicador
-
-Debido a esto agregué las versiones de cada DAG sin schemas.
 
 ## SMTP
 
