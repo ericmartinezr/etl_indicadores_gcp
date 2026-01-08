@@ -1,15 +1,29 @@
 import pytest
+from unittest.mock import patch
 from airflow.models import DagBag
 from airflow import DAG
-
-PROJECT_ID = "etl-indicadores"
-DATASET_ID = "ds_indicadores"
-TABLE_ID = "tbl_indicadores"
+from airflow.models import Variable
 
 
 @pytest.fixture()
 def dagbag() -> DagBag:
-    return DagBag()
+    with patch.dict('os.environ',
+                    AIRFLOW_VAR_EMAIL="myemail@example.com",
+                    AIRFLOW_VAR_PROJECT="etl-indicadores",
+                    AIRFLOW_VAR_DATASET="ds_indicadores",
+                    AIRFLOW_VAR_TABLE="tbl_indicadores",
+                    AIRFLOW_VAR_BUCKET="indicadores-bucket",
+                    AIRFLOW_VAR_INDICATORS='["uf", "ipc"]'):
+
+        assert "myemail@example.com" == Variable.get("email")
+        assert "etl-indicadores" == Variable.get("project")
+        assert "ds_indicadores" == Variable.get("dataset")
+        assert "tbl_indicadores" == Variable.get("table")
+        assert "indicadores-bucket" == Variable.get("bucket")
+        assert ["uf", "ipc"] == Variable.get(
+            "indicators", deserialize_json=True)
+
+        return DagBag(dag_folder="dags/", read_dags_from_db=False, include_examples=False)
 
 
 @pytest.fixture()

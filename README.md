@@ -12,40 +12,39 @@ export REGION="us-central1"
 export PROJECT_NUMBER=$(gcloud projects describe $PROJECT_ID --format="value(projectNumber)")
 export BQ_DATASET="ds_indicadores"
 export BQ_TABLE="tbl_indicadores"
-export BUCKET="indicadores-bucket"
 
 gcloud config set project $PROJECT_ID
 ```
 
-## Generar una cuenta de servicio en Google Cloud
+## Crear una cuenta de servicio para Composer y asignarle persmisos sobre Cloud Storage, BigQuery y Logging
 
 ```sh
 gcloud iam service-accounts create airflow-app-sa \
   --description="Cuenta de servicio para Airflow"
 
-SA_EMAIL="airflow-app-sa@${PROJECT_ID}.iam.gserviceaccount.com"
+SA_EMAIL_AF="airflow-app-sa@${PROJECT_ID}.iam.gserviceaccount.com"
+
+gcloud projects add-iam-policy-binding $PROJECT_ID --member="serviceAccount:${SA_EMAIL_AF}" --role="roles/storage.objectUser"
+gcloud projects add-iam-policy-binding $PROJECT_ID --member="serviceAccount:${SA_EMAIL_AF}" --role="roles/bigquery.user"
+gcloud projects add-iam-policy-binding $PROJECT_ID --member="serviceAccount:${SA_EMAIL_AF}" --role="roles/logging.logWriter"
+gcloud projects add-iam-policy-binding $PROJECT_ID --member="serviceAccount:${SA_EMAIL_AF}" --role="roles/composer.worker"
 ```
 
-## Dar permisos para operar sobre Cloud Storage, BigQuery y Logging
+## Crear una cuenta de servicio para Cloud Build y asignarle permisos sobre Cloud Build y Logging
 
 ```sh
-gcloud projects add-iam-policy-binding $PROJECT_ID --member="serviceAccount:${SA_EMAIL}" --role="roles/storage.objectUser"
-gcloud projects add-iam-policy-binding $PROJECT_ID --member="serviceAccount:${SA_EMAIL}" --role="roles/bigquery.user"
-gcloud projects add-iam-policy-binding $PROJECT_ID --member="serviceAccount:${SA_EMAIL}" --role="roles/logging.logWriter"
-gcloud projects add-iam-policy-binding $PROJECT_ID --member="serviceAccount:${SA_EMAIL}" --role="roles/composer.worker"
+gcloud iam service-accounts create cloudbuild-app-sa \
+  --description="Cuenta de servicio para Cloud Build"
+
+SA_EMAIL_CB="cloudbuild-app-sa@${PROJECT_ID}.iam.gserviceaccount.com"
+
+gcloud projects add-iam-policy-binding $PROJECT_ID --member="serviceAccount:${SA_EMAIL_CB}" --role="roles/storage.objectUser"
+gcloud projects add-iam-policy-binding $PROJECT_ID --member="serviceAccount:${SA_EMAIL_CB}" --role="roles/cloudbuild.builds.editor"
+gcloud projects add-iam-policy-binding $PROJECT_ID --member="serviceAccount:${SA_EMAIL_CB}" --role="roles/logging.viewer"
+gcloud projects add-iam-policy-binding $PROJECT_ID --member="serviceAccount:${SA_EMAIL_CB}" --role="roles/logging.logWriter"
 ```
 
-## Generar el bucket
-
-```sh
-gcloud storage buckets create gs://$BUCKET --location=$REGION
-```
-
-## Generar una llave para uso local
-
-```sh
-gcloud iam service-accounts keys create /home/eric/.config/gcloud/airflow.json --iam-account=airflow-app-sa@etl-indicadores.iam.gserviceaccount.com
-```
+- Referencia: para ver configuración de Cloud Build que no se abarca en este documento ver https://docs.cloud.google.com/composer/docs/composer-3/dag-cicd-github
 
 ## Eliminar tabla y dataset (opcional)
 
@@ -73,7 +72,7 @@ Esto es necesario ya que si elimino el dataset y la tabla con el comando `bq`
 se pierden todos los permisos.
 
 ```sh
-gcloud projects add-iam-policy-binding $PROJECT_ID --member="serviceAccount:${SA_EMAIL}" --role="roles/bigquery.dataEditor"
+gcloud projects add-iam-policy-binding $PROJECT_ID --member="serviceAccount:${SA_EMAIL_AF}" --role="roles/bigquery.dataEditor"
 ```
 
 # Configuración GCP
@@ -93,9 +92,8 @@ EMAIL="my.email@gmail.com"
 gcloud composer environments create etl-indicadores \
     --location $REGION \
     --image-version composer-3-airflow-2.10.5-build.23 \
-    --service-account "${SA_EMAIL}" \
+    --service-account "${SA_EMAIL_AF}" \
     --environment-size medium \
-
     --airflow-configs "^|^smtp-smtp_host=smtp.gmail.com|smtp-smtp_starttls=True|smtp-smtp_ssl=False|smtp-smtp_user=${EMAIL}|smtp-smtp_port=587|smtp-smtp_password_secret=smtp-password|smtp-smtp_mail_from=${EMAIL}|core-allowed_deserialization_classes=airflow.*,schemas.indicador_response.IndicadorResponse,schemas.indicador_response.SerieIndicador"
 
 # Importar las variables de ambiente al almacenamiento interno de Airflow
@@ -139,6 +137,12 @@ echo -n "SMTP_PASSWORD" | gcloud secrets create \
 - Referencia: https://docs.cloud.google.com/composer/docs/composer-3/configure-email#smtp_password
 
 # Configuración local
+
+## Generar una llave para uso local
+
+```sh
+gcloud iam service-accounts keys create /home/eric/.config/gcloud/airflow.json --iam-account=airflow-app-sa@etl-indicadores.iam.gserviceaccount.com
+```
 
 ## Actualizar la librería cryptography
 

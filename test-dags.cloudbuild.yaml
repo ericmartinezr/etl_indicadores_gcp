@@ -1,0 +1,38 @@
+# Original source, with a few changes
+# https://docs.cloud.google.com/composer/docs/composer-3/dag-cicd-github
+#
+#steps:
+#  - name: python:3.11-slim
+#    entrypoint: pip
+#    args:
+#      ['install', '-r', 'requirements.txt', '-c', 'constraints.txt', '--user']
+#
+#  - name: python:3.11-slim
+#    entrypoint: pip
+#    args: ['install', '-r', 'requirements-test.txt', '--user']
+#
+#  - name: python:3.11-slim
+#    entrypoint: python3.11
+#    args: ['-m', 'pytest', '-s', 'tests/']
+#
+
+steps:
+  - name: python:3.11-slim
+    entrypoint: /bin/bash
+    args:
+      - -c
+      - |
+        pip install --user -r requirements.txt -c constraints.txt
+        pip install --user -r requirements-test.txt
+
+        export PATH="$$PATH:/builder/home/.local/bin"
+
+        export AIRFLOW_HOME=$$(pwd)
+        export PYTHONPATH=$$PYTHONPATH:$$(pwd)
+
+        airflow db init
+
+        python3 -m pytest -s tests/
+
+options:
+  logging: CLOUD_LOGGING_ONLY

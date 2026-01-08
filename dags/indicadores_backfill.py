@@ -1,7 +1,6 @@
 import pendulum
 import logging
 import httpx
-import json
 from datetime import timedelta
 from typing import Optional
 from pydantic import ValidationError
