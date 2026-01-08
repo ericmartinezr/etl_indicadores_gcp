@@ -51,6 +51,20 @@ echo -n "SMTP_PASSWORD" | gcloud secrets create \
 
 ## Ejecución exitosa
 
+### Airflow
+
 Este es un pantallazo de una ejecución exitosa solo del DAG diario. El DAG histórico toma tiempo (se ejecuta anualmente con catchup=True que lo hace ejecutar desde 1928 hasta el 2026).
 
-![ejecucion exitosa](img/success.png)
+![Airflow](img/airflow.png)
+
+### BigQuery
+
+Una simple query sobre la data cargada en BigQuery
+
+![BigQuery](img/bigquery.png)
+
+### Looker Studio
+
+Un gráfico para visualizar los valores cargados en BigQuery
+
+![LookerStudio](img/lookerstudio.png)
