@@ -100,6 +100,8 @@ Para evitar colapsar la API se asignó un pool de 3 slots. Esto se realiza desde
 
 ## Serialización
 
+_Nota: Esta característica se quitó finalmente, pero se deja en la documentación para la posterioridad_
+
 Ya que estoy usando schemas de Pydantic es necesario registrarlos en la configuración para que Airflow pueda serializarlos/deserializarlos
 
 ```sh

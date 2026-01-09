@@ -20,7 +20,7 @@ Existen 2 dags con lógica interna casi idéntica. Para simplificar el desarroll
 
 # Configuración común
 
-Definición de variables comunes al proyecto
+Configuración común tanto para GCP como para local. Local se conecta a BigQuery directamente por lo que es necesario realizar estos pasos.
 
 ```bash
 export PROJECT_ID="etl-indicadores"
@@ -60,7 +60,7 @@ gcloud projects add-iam-policy-binding $PROJECT_ID --member="serviceAccount:${SA
 gcloud projects add-iam-policy-binding $PROJECT_ID --member="serviceAccount:${SA_EMAIL_CB}" --role="roles/logging.logWriter"
 ```
 
-- Referencia: para ver configuración de Cloud Build que no se abarca en este documento: https://docs.cloud.google.com/composer/docs/composer-3/dag-cicd-github
+- Referencia: para ver configuración de Cloud Build que no se abarca en este documento: https://docs.cloud.google.com/composer/docs/composer-3/dag-cicd-github (_no se sigue al pie de la letra, solo se toma una parte de la documentación_)
 
 ## Eliminar tabla y dataset (opcional)
 
@@ -84,7 +84,7 @@ $PROJECT_ID:$BQ_DATASET.$BQ_TABLE
 
 Se usaron campos `clustering` en vez de particiones debido a la siguiente regla
 
-> Partitioning results in a small amount of data per partition (approximately less than 10 GB). Creating many small partitions increases the table's metadata, and can affect metadata access times when querying the table.
+> _Partitioning results in a small amount of data per partition (approximately less than 10 GB). Creating many small partitions increases the table's metadata, and can affect metadata access times when querying the table._
 
 Referencia: https://docs.cloud.google.com/bigquery/docs/partitioned-tables
 
@@ -104,3 +104,11 @@ gcloud projects add-iam-policy-binding $PROJECT_ID --member="serviceAccount:${SA
 # Configuración local
 
 ### Ver documento **[LOCAL](LOCAL.md)**
+
+<br>
+<br>
+<br>
+
+# Diagrama
+
+![Diagrama](img/diagrama.png)
